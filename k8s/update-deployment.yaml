@@ -1,0 +1,15 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: update-job
+spec:
+  schedule: "0 * * * *"  # Runs every hour
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - name: update-job
+            image: your-dockerhub-username/update-job:latest
+            command: ["python", "update.py"]
+          restartPolicy: OnFailure
