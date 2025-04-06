@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: popularity-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: popularity-api
+  template:
+    metadata:
+      labels:
+        app: popularity-api
+    spec:
+      containers:
+      - name: popularity-api
+        image: your-dockerhub-username/popularity-api:latest
+        ports:
+        - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: popularity-service
+spec:
+  selector:
+    app: popularity-api
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+  type: ClusterIP

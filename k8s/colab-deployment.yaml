@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: colab-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: colab-api
+  template:
+    metadata:
+      labels:
+        app: colab-api
+    spec:
+      containers:
+      - name: colab-api
+        image: your-dockerhub-username/colab-api:latest
+        ports:
+        - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: colab-service
+spec:
+  selector:
+    app: colab-api
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+  type: ClusterIP

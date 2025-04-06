@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: input-api
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: input-api
+  template:
+    metadata:
+      labels:
+        app: input-api
+    spec:
+      containers:
+      - name: input-api
+        image: your-dockerhub-username/input-api:latest
+        ports:
+        - containerPort: 8000
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: input-service
+spec:
+  selector:
+    app: input-api
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8000
+  type: ClusterIP
