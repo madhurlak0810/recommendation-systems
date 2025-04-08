@@ -4,7 +4,6 @@ import pandas as pd
 import numpy as np
 import boto3
 import io
-import os
 from routes import router
 import asyncio
 
@@ -16,7 +15,7 @@ app.include_router(router)
 
 # ---------- CONFIG ----------
 BUCKET_NAME = "your-recommender-data"
-S3_KEY = "models/popularity.csv"
+S3_KEY = "cleaned/models.csv"
 REGION = "us-east-1"  # change as needed
 # ----------------------------
 

@@ -14,7 +14,7 @@ spec:
     spec:
       containers:
       - name: popularity-api
-        image: your-dockerhub-username/popularity-api:latest
+        image: madhurlak0810/popularity-api:latest
         ports:
         - containerPort: 8000
 ---
