@@ -42,9 +42,9 @@ async def startup_event():
         while True:
             try:
                 df_clean = fetch_data_from_s3()
-                print("✅ Data refreshed")
+                print("Data refreshed")
             except Exception as e:
-                print(f"❌ Failed to refresh data: {e}")
+                print(f"Failed to refresh data: {e}")
             await asyncio.sleep(300)  # refresh every 5 minutes
 
     df_clean = fetch_data_from_s3()
