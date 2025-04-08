@@ -1,3 +1,4 @@
 /data
 .*
 *accessKeys.csv
+*/__pycache__
