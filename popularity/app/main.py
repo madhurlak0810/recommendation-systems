@@ -4,7 +4,7 @@ import pandas as pd
 import numpy as np
 import boto3
 import io
-from routes import router
+from app.routes import router
 import asyncio
 
 app = FastAPI()
@@ -47,7 +47,8 @@ async def startup_event():
             await asyncio.sleep(300)  # refresh every 5 minutes
 
     df_clean = fetch_data_from_s3()
-    app.add_event_handler("startup", refresh_loop())
+    # app.add_event_handler("startup", refresh_loop())
+    asyncio.create_task(refresh_loop())
 
 
 # Allow access to df_clean from routes

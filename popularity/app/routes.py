@@ -3,7 +3,7 @@ from typing import Optional
 import pandas as pd
 
 router = APIRouter()
-df_loader = None  # This will be injected from main.py
+router.df_loader = None # This will be injected from main.py
 
 @router.get("/popular-products")
 def get_popular_products(
@@ -11,10 +11,10 @@ def get_popular_products(
     main_category: Optional[str] = Query(None),
     sub_category: Optional[str] = Query(None)
 ):
-    if df_loader is None:
+    if router.df_loader is None:
         return {"error": "Data not loaded"}
 
-    df = df_loader().copy()
+    df = router.df_loader().copy()
 
     if main_category:
         df = df[df['main_category'].str.lower() == main_category.lower()]
