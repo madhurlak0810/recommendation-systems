@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pandas
+numpy
+boto3
+lightfm
