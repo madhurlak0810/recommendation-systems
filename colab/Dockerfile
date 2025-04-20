@@ -2,6 +2,7 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# lightfm dependencies
 RUN apt-get update && apt-get install -y \
     build-essential \
     gcc \
@@ -12,7 +13,9 @@ RUN apt-get update && apt-get install -y \
 ENV CFLAGS="-march=armv8-a"
 
 COPY requirements.txt .
-COPY temp.csv .
+# temporary store fake user data
+COPY user_ratings.csv .
+
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY app/ ./app/

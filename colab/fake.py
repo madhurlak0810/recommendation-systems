@@ -110,7 +110,7 @@ def generate_user_dataset(df: pd.DataFrame, user_count=1000, clusters=10):
     return fake_df
 
 if __name__ == "__main__":
-    df = pd.read_csv("data/models.csv")
+    df = pd.read_csv("../data/models.csv") # TODO: read from s3
 
     users = generate_user_dataset(df, 100)
-    users.to_csv("temp.csv")
+    users.to_csv("user_ratings.csv")

@@ -1,4 +1,5 @@
 from fastapi import FastAPI, Query
+from contextlib import asynccontextmanager
 from typing import Optional
 import pandas as pd
 import numpy as np
@@ -22,34 +23,37 @@ def make_collab_model(df):
     model.fit(interactions, epochs=30, num_threads=4)
     return model, dataset, interactions
 
-app = FastAPI()
-app.include_router(router)
-
 # Global storage
 model = None
 dataset = None
 interactions = None
 
-# Load data from S3 on startup
-@app.on_event("startup")
-async def startup_event():
-    global model
-    global dataset
-    global interactions
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    global model, dataset, interactions
 
     async def refresh_loop():
         while True:
             try:
-                model, dataset, interactions = make_collab_model(pd.read_csv("temp.csv"))
-                print("Data refreshed")
+                df = pd.read_csv("user_ratings.csv")
+                model, dataset, interactions = make_collab_model(df)
+                print("✅ Model refreshed")
             except Exception as e:
-                print(f"Failed to refresh data: {e}")
-            await asyncio.sleep(300)  # refresh every 5 minutes
+                print(f"❌ Failed to refresh model: {e}")
+            await asyncio.sleep(300)
 
-    model, dataset, interactions = make_collab_model(pd.read_csv("temp.csv"))
-    # app.add_event_handler("startup", refresh_loop())
+    # Initial model training
+    model, dataset, interactions = make_collab_model(pd.read_csv("user_ratings.csv"))
+
+    # Start the refresh loop
     asyncio.create_task(refresh_loop())
 
+    yield  # Application is running
+
+    # Optional: cleanup code here (on shutdown)
+
+app = FastAPI(lifespan=lifespan)
+app.include_router(router)
 
 # Allow access to df_clean from routes
 def get_model():
