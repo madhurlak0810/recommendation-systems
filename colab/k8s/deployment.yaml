@@ -1,0 +1,31 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: colab-app-deployment
+  labels:
+    app: colab-app
+spec:
+  replicas: 1  # Number of replicas, adjust as needed
+  selector:
+    matchLabels:
+      app: colab-app
+  template:
+    metadata:
+      labels:
+        app: colab-app
+    spec:
+      containers:
+      - name: colab-app
+        image: jliu3714/colab-app:latest  # Replace with your Docker image
+        ports:
+        - containerPort: 8000  # Exposed port for your FastAPI app
+        env:
+        - name: ENV_VAR_NAME  # Add any environment variables you may need
+          value: "value"
+        resources:
+          limits:
+            memory: "512Mi"  # Memory limit (adjust based on your app)
+            cpu: "1"         # CPU limit
+          requests:
+            memory: "256Mi"  # Memory request
+            cpu: "0.5"       # CPU request
