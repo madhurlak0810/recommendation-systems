@@ -4,3 +4,4 @@ pandas
 numpy
 boto3
 lightfm
+clearml

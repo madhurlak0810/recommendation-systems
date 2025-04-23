@@ -3,24 +3,56 @@ from contextlib import asynccontextmanager
 from typing import Optional
 import pandas as pd
 import numpy as np
-import io
+import joblib
 from app.routes import router
-import asyncio
 from lightfm import LightFM
 from lightfm.data import Dataset
-import pandas as pd
-import numpy as np
+from lightfm.evaluation import precision_at_k
+from clearml import Task, Logger
 
-def make_collab_model(df):
-    # Prepare dataset
+def make_collab_model(df: pd.DataFrame):
+    # clearml task setup
+    task: Task = Task.init(
+        project_name="recommendation-systems",
+        task_name="colab model training",
+    )
+    logger = Logger.current_logger()
+
+    # record parameters
+    params = {
+        "no_components": 10,
+        "loss": "warp",
+        "num_epochs": 30,
+        "k": 5,
+    }
+    task.connect(params)
+
+    # prepare dataset
     dataset = Dataset()
     dataset.fit(df['user'], df['name'])
 
     (interactions, weights) = dataset.build_interactions([(row['user'], row['name'], row['rating']) for _, row in df.iterrows()])
 
-    # Train model
-    model = LightFM(no_components=10, loss='warp')  # 'warp' good for implicit, use 'mse' or 'logistic' for explicit
-    model.fit(interactions, epochs=30, num_threads=4)
+    # train model
+    model = LightFM(no_components=params["no_components"], loss=params["loss"])
+    for epoch in range(params["num_epochs"]):
+        # only fit partial
+        model.fit_partial(interactions, epochs=1, num_threads=4)
+
+        precision = precision_at_k(model, interactions, k=params["k"]).mean()
+
+        logger.report_scalar(f"Precision@{params['k']}", "Epoch", iteration=epoch, value=precision)
+        print(f"Epoch {epoch}/{params['num_epochs']} - Precision@{params['k']}: {precision:.4f}")
+    
+    # save model artifacts
+    joblib.dump(model, "lightfm_model.pkl")
+    task.upload_artifact(name="lightfm_model", artifact_object="lightfm_model.pkl")
+    joblib.dump(dataset, "dataset.pkl")
+    task.upload_artifact("dataset", artifact_object="dataset.pkl")
+    joblib.dump(interactions, "interactions.pkl")
+    task.upload_artifact("interactions", artifact_object="interactions.pkl")
+    task.close()
+
     return model, dataset, interactions
 
 # Global storage
@@ -32,25 +64,14 @@ interactions = None
 async def lifespan(app: FastAPI):
     global model, dataset, interactions
 
-    async def refresh_loop():
-        while True:
-            try:
-                df = pd.read_csv("user_ratings.csv")
-                model, dataset, interactions = make_collab_model(df)
-                print("✅ Model refreshed")
-            except Exception as e:
-                print(f"❌ Failed to refresh model: {e}")
-            await asyncio.sleep(300)
-
-    # Initial model training
-    model, dataset, interactions = make_collab_model(pd.read_csv("user_ratings.csv"))
-
-    # Start the refresh loop
-    asyncio.create_task(refresh_loop())
-
-    yield  # Application is running
-
-    # Optional: cleanup code here (on shutdown)
+    try:
+        # Initialize model at startup
+        df = pd.read_csv("user_ratings.csv")
+        model, dataset, interactions = make_collab_model(df)
+        print("✅ Model initialized")
+        yield
+    finally:
+        print("👋 Shutting down app... clean up here if needed")
 
 app = FastAPI(lifespan=lifespan)
 app.include_router(router)
