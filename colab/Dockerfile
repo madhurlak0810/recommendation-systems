@@ -13,8 +13,6 @@ RUN apt-get update && apt-get install -y \
 ENV CFLAGS="-march=armv8-a"
 
 COPY requirements.txt .
-# temporary store fake user data
-COPY user_ratings.csv .
 
 RUN pip install --no-cache-dir -r requirements.txt
 
