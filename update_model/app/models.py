@@ -4,6 +4,8 @@ from sklearn.decomposition import TruncatedSVD
 import joblib
 from lightfm import LightFM
 from lightfm.data import Dataset
+from sklearn.feature_extraction.text import TfidfVectorizer
+from sklearn.metrics.pairwise import cosine_similarity
 import os
 import os # Import os for path joining
 
@@ -390,3 +392,79 @@ class ProductCollabModel:
         except Exception as e:
             print(f"Error generating recommendations for user '{user_id}': {e}")
             return None
+        
+
+class ProductNameSimilarityModel:
+    def __init__(self):
+        self.product_names = None
+        self.vectorizer = None
+        self.tfidf_matrix = None
+        self.cosine_sim = None
+        self.product_indices = None
+        self.model_path = None
+        self.num_recommendations = None
+
+    def cosinesimilarproducts(self, product_name, csv_file_path, save_dir, num_recommendations=10, sample_size=10000):
+        try:
+            # Step 1: Read and sample data
+            df = pd.read_csv(csv_file_path)
+
+            # Sample if large
+            if len(df) > sample_size:
+                df = df.sample(n=sample_size, random_state=42)
+
+            self.product_names = pd.Series(df['name']).dropna().unique()
+            self.num_recommendations = num_recommendations
+
+            # Step 2: Train cosine similarity model
+            self.vectorizer = TfidfVectorizer(stop_words='english')
+            self.tfidf_matrix = self.vectorizer.fit_transform(self.product_names)
+            self.cosine_sim = cosine_similarity(self.tfidf_matrix, self.tfidf_matrix)
+            self.product_indices = {name: idx for idx, name in enumerate(self.product_names)}
+
+            # Step 3: Save model
+            os.makedirs(save_dir, exist_ok=True)
+            self.model_path = os.path.join(save_dir, "cosine_similarity_model.pkl")
+
+            model_data = {
+                'product_names': self.product_names,
+                'vectorizer': self.vectorizer,
+                'tfidf_matrix': self.tfidf_matrix,
+                'cosine_sim': self.cosine_sim,
+                'product_indices': self.product_indices,
+                'num_recommendations': self.num_recommendations
+            }
+
+            joblib.dump(model_data, self.model_path)
+            print(f"Model data saved to {self.model_path}")
+
+            return self.get_similar_products(product_name)
+
+        except Exception as e:
+            print(f"Error training or saving model: {e}")
+            return []
+
+    def load_model(self, model_path):
+        if self.cosine_sim is None or self.product_names is None or self.product_indices is None:
+            try:
+                model_data = joblib.load(model_path)
+                self.product_names = model_data['product_names']
+                self.vectorizer = model_data['vectorizer']
+                self.tfidf_matrix = model_data['tfidf_matrix']
+                self.cosine_sim = model_data['cosine_sim']
+                self.product_indices = model_data['product_indices']
+                self.num_recommendations = model_data['num_recommendations']
+                self.model_path = model_path
+                print(f"Model loaded successfully from {model_path}")
+                return True
+            except Exception as e:
+                print(f"Error loading model: {e}")
+                return False
+        return True
+
+    def get_similar_products(self, product_name):
+        # Always compare against the vectorized list
+        product_vector = self.vectorizer.transform([product_name])
+        similarity_scores = cosine_similarity(product_vector, self.tfidf_matrix).flatten()
+        top_indices = similarity_scores.argsort()[::-1][1:self.num_recommendations+1]
+        return [(self.product_names[i], round(similarity_scores[i], 3)) for i in top_indices]
