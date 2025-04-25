@@ -395,26 +395,30 @@ class ProductCollabModel:
         
 
 class ProductNameSimilarityModel:
-    def __init__(self):
+    def __init__(self,csv_path,save_model_dir,num_recommendations=10,sample_size=10000):
         self.product_names = None
         self.vectorizer = None
         self.tfidf_matrix = None
         self.cosine_sim = None
         self.product_indices = None
-        self.model_path = None
         self.num_recommendations = None
+        self.csv_path = csv_path
+        self.save_model_dir = save_model_dir
+        self.sample_size = sample_size
+        self.model_path = os.path.join(self.save_model_dir, 'cosine_similarity_model.joblib')
+        self.num_recommendations = num_recommendations
+        self.cosinesimilarproducts()
 
-    def cosinesimilarproducts(self, product_name, csv_file_path, save_dir, num_recommendations=10, sample_size=10000):
+    def cosinesimilarproducts(self):
         try:
             # Step 1: Read and sample data
-            df = pd.read_csv(csv_file_path)
+            df = pd.read_csv(self.csv_path)
 
             # Sample if large
-            if len(df) > sample_size:
-                df = df.sample(n=sample_size, random_state=42)
+            if len(df) > self.sample_size:
+                df = df.sample(n=self.sample_size, random_state=42)
 
             self.product_names = pd.Series(df['name']).dropna().unique()
-            self.num_recommendations = num_recommendations
 
             # Step 2: Train cosine similarity model
             self.vectorizer = TfidfVectorizer(stop_words='english')
@@ -423,8 +427,7 @@ class ProductNameSimilarityModel:
             self.product_indices = {name: idx for idx, name in enumerate(self.product_names)}
 
             # Step 3: Save model
-            os.makedirs(save_dir, exist_ok=True)
-            self.model_path = os.path.join(save_dir, "cosine_similarity_model.pkl")
+            os.makedirs(self.save_model_dir, exist_ok=True)
 
             model_data = {
                 'product_names': self.product_names,
@@ -438,11 +441,11 @@ class ProductNameSimilarityModel:
             joblib.dump(model_data, self.model_path)
             print(f"Model data saved to {self.model_path}")
 
-            return self.get_similar_products(product_name)
+            return True
 
         except Exception as e:
             print(f"Error training or saving model: {e}")
-            return []
+            return False
 
     def load_model(self, model_path):
         if self.cosine_sim is None or self.product_names is None or self.product_indices is None:
