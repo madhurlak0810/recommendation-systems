@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: recommendation-systems-app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./app:/app  # Mount your app source code
+      - /c/Users/jerry/clearml.conf:/root/clearml.conf  # Mount clearml.conf into container
+    command: >
+      uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
