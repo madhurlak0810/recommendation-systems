@@ -3,6 +3,11 @@ import pandas as pd
 import random
 import tqdm
 
+import os
+import io
+import boto3
+from dotenv import load_dotenv
+
 # GLOBAL POPULAR/UNIVERSAL ITEMS (reuse these across all users)
 def get_global_items(df: pd.DataFrame, n=10):
     return df.sort_values("no_of_ratings", ascending=False).head(n)
@@ -82,7 +87,7 @@ def generate_user_dataset(df: pd.DataFrame, user_count=1000, clusters=10):
 
     for i in tqdm.tqdm(range(user_count)):
         user_id = "user" + str(i)
-        cluster_id = i % clusters # new 
+        cluster_id = i % clusters # new
         preferred_category = cluster_categories[cluster_id] # new
 
         name, rating, main_category, sub_category = create_category_user(
@@ -110,7 +115,33 @@ def generate_user_dataset(df: pd.DataFrame, user_count=1000, clusters=10):
     return fake_df
 
 if __name__ == "__main__":
-    df = pd.read_csv("../data/models.csv") # TODO: read from s3
+    # df = pd.read_csv("../data/models.csv") # TODO: read from s3
+
+    # include credential in cmd line
+    # if len(sys.argv) > 1:
+    #     cred = pd.read_csv(sys.argv[1])
+    #     s3   = boto3.client\
+    #     (
+    #         "s3",
+    #         aws_access_key_id     = cred["Access key ID"].values[0],
+    #         aws_secret_access_key = cred["Secret access key"].values[0],
+    #         region_name           = "us-east-1"
+    #     )
+
+    load_dotenv()
+
+    # credentials logged in .env file
+    s3 = boto3.client\
+    (
+        "s3",
+        aws_access_key_id     = os.getenv("AWS_ACCESS_KEY_ID"),
+        aws_secret_access_key = os.getenv("AWS_SECRET_ACCESS_KEY"),
+        region_name           = os.getenv("AWS_REGION")
+    )
+
+    # modify bucket and key for change of folder
+    response = s3.get_object(Bucket="your-recommender-data", Key="cleaned/models.csv")
+    df       = pd.read_csv(io.BytesIO(response["Body"].read()))
 
     users = generate_user_dataset(df, 100)
     users.to_csv("user_ratings.csv")
