@@ -72,3 +72,34 @@ async def submit_review(review: Review):
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+"""
+How to run the FastAPI app and test the /submit-review/ endpoint:
+
+1. **Start the FastAPI App**  
+Make sure your virtual environment is activated and run:
+
+    python -m uvicorn input.app.main:app --reload
+
+This will start the server at: http://127.0.0.1:8000
+
+---
+
+2. **Test the /submit-review/ Endpoint Using cURL**
+
+Use the following command to submit a sample review:
+
+    curl -X POST "http://127.0.0.1:8000/submit-review/" \
+    -H "Content-Type: application/json" \
+    -d '{"user": "userTest", "name": "p1", "rating": 5, "main_category": "test", "sub_category": "sub"}'
+
+If successful, you should get a response like:
+
+    {"message":"Review submitted successfully."}
+
+This will append the review data as a new row in the CSV stored in your configured S3 bucket.
+
+---
+3. **Note:**
+- Ensure your `.env` file is properly configured with AWS credentials and S3 bucket details before running.
+- The server must be running when you execute the `curl` command.
+"""
