@@ -1,14 +1,14 @@
 from fastapi import APIRouter, Query
 from typing import Optional
-import boto3
+# import boto3
 import joblib
 import numpy as np
-import pandas as pd
-from io import BytesIO
-from lightfm import LightFM
-from lightfm.data import Dataset
-from lightfm.evaluation import precision_at_k
-from clearml import Task, Logger
+# import pandas as pd
+# from io import BytesIO
+# from lightfm import LightFM
+# from lightfm.data import Dataset
+# from lightfm.evaluation import precision_at_k
+# from clearml import Task, Logger
 
 router = APIRouter()
 router.model = None # This will be injected from main.py
@@ -47,66 +47,86 @@ def get_popular_products(
 
     return {user: results}
 
-def _train_model_logic():
-    # retrieve user_ratings
-    bucket_name = "your-recommender-data"
-    prefix = "reviews/user_ratings.csv"
-    s3 = boto3.client("s3")
-    s3_obj = s3.get_object(Bucket=bucket_name, Key=prefix)
-    df = pd.read_csv(BytesIO(s3_obj["Body"].read()))
+def load_model():
+    model_path = "../models/lightfm_collab_model.joblib"
+    try:
+        model_data = joblib.load()
+        model = model_data['model']
+        dataset = model_data['dataset']
+        interactions = model_data['interactions']
 
-    # clearml task setup
-    task: Task = Task.init(
-        project_name="recommendation-systems",
-        task_name="colab model training",
-    )
-    logger = Logger.current_logger()
+        print(f"Collaborative model data loaded successfully from {model_path}")
+        return model, dataset, interactions
+    except FileNotFoundError:
+        print(f"Error: Collaborative model file not found at {model_path}")
+        return False
+    except KeyError as e:
+        print(f"Error: Collaborative model file at {model_path} is missing expected key: {e}")
+        return False
+    except Exception as e:
+        print(f"Error loading collaborative model data from {model_path}: {e}")
+        return False
 
-    # record parameters
-    params = {
-        "no_components": 10,
-        "loss": "warp",
-        "num_epochs": 30,
-        "k": 5,
-    }
-    task.connect(params)
+# def _train_model_logic():
+#     # retrieve user_ratings
+#     bucket_name = "your-recommender-data"
+#     prefix = "reviews/user_ratings.csv"
+#     s3 = boto3.client("s3")
+#     s3_obj = s3.get_object(Bucket=bucket_name, Key=prefix)
+#     df = pd.read_csv(BytesIO(s3_obj["Body"].read()))
 
-    # prepare dataset
-    dataset = Dataset()
-    dataset.fit(df['user'], df['name'])
+#     # clearml task setup
+#     task: Task = Task.init(
+#         project_name="recommendation-systems",
+#         task_name="colab model training",
+#     )
+#     logger = Logger.current_logger()
 
-    (interactions, weights) = dataset.build_interactions([(row['user'], row['name'], row['rating']) for _, row in df.iterrows()])
+#     # record parameters
+#     params = {
+#         "no_components": 10,
+#         "loss": "warp",
+#         "num_epochs": 30,
+#         "k": 5,
+#     }
+#     task.connect(params)
 
-    # train model
-    model = LightFM(no_components=params["no_components"], loss=params["loss"])
-    for epoch in range(params["num_epochs"]):
-        # only fit partial
-        model.fit_partial(interactions, epochs=1, num_threads=4)
+#     # prepare dataset
+#     dataset = Dataset()
+#     dataset.fit(df['user'], df['name'])
 
-        precision = precision_at_k(model, interactions, k=params["k"]).mean()
+#     (interactions, weights) = dataset.build_interactions([(row['user'], row['name'], row['rating']) for _, row in df.iterrows()])
 
-        logger.report_scalar(f"Precision@{params['k']}", "Epoch", iteration=epoch, value=precision)
-        print(f"Epoch {epoch}/{params['num_epochs']} - Precision@{params['k']}: {precision:.4f}")
+#     # train model
+#     model = LightFM(no_components=params["no_components"], loss=params["loss"])
+#     for epoch in range(params["num_epochs"]):
+#         # only fit partial
+#         model.fit_partial(interactions, epochs=1, num_threads=4)
+
+#         precision = precision_at_k(model, interactions, k=params["k"]).mean()
+
+#         logger.report_scalar(f"Precision@{params['k']}", "Epoch", iteration=epoch, value=precision)
+#         print(f"Epoch {epoch}/{params['num_epochs']} - Precision@{params['k']}: {precision:.4f}")
     
-    # save model artifacts
-    joblib.dump(model, "lightfm_model.pkl")
-    task.upload_artifact(name="lightfm_model", artifact_object="lightfm_model.pkl")
-    joblib.dump(dataset, "dataset.pkl")
-    task.upload_artifact("dataset", artifact_object="dataset.pkl")
-    joblib.dump(interactions, "interactions.pkl")
-    task.upload_artifact("interactions", artifact_object="interactions.pkl")
-    task.close()
+#     # save model artifacts
+#     joblib.dump(model, "lightfm_model.pkl")
+#     task.upload_artifact(name="lightfm_model", artifact_object="lightfm_model.pkl")
+#     joblib.dump(dataset, "dataset.pkl")
+#     task.upload_artifact("dataset", artifact_object="dataset.pkl")
+#     joblib.dump(interactions, "interactions.pkl")
+#     task.upload_artifact("interactions", artifact_object="interactions.pkl")
+#     task.close()
 
-    item_meta = df.drop_duplicates(subset="name").set_index("name")[["main_category", "sub_category"]].to_dict(orient="index")
-    joblib.dump(item_meta, "item_meta.pkl")
+#     item_meta = df.drop_duplicates(subset="name").set_index("name")[["main_category", "sub_category"]].to_dict(orient="index")
+#     joblib.dump(item_meta, "item_meta.pkl")
 
-    return model, dataset, interactions
+#     return model, dataset, interactions
 
-@router.get("/train_model")
-def train_collab_model():
-    model, dataset, interactions = _train_model_logic()
+# @router.get("/train_model")
+# def train_collab_model():
+#     model, dataset, interactions = _train_model_logic()
 
-    # Optional: update the global reference if needed (e.g. for live reload)
-    router.model = lambda: (model, dataset, interactions)
+#     # Optional: update the global reference if needed (e.g. for live reload)
+#     router.model = lambda: (model, dataset, interactions)
 
-    return {"message": "Model trained and artifacts saved successfully."}
+#     return {"message": "Model trained and artifacts saved successfully."}

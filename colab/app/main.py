@@ -1,6 +1,6 @@
 from fastapi import FastAPI
 from contextlib import asynccontextmanager
-from app.routes import router, _train_model_logic
+from app.routes import router, load_model
 
 
 # Global storage
@@ -14,7 +14,7 @@ async def lifespan(app: FastAPI):
 
     try:
         # Initialize model at startup
-        model, dataset, interactions = _train_model_logic()
+        model, dataset, interactions = load_model()
         print("✅ Model initialized")
         yield
     finally:

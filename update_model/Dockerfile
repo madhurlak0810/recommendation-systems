@@ -2,8 +2,22 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
-COPY update.py .
+# lightfm dependencies
+RUN apt-get update && apt-get install -y \
+    build-essential \
+    gcc \
+    g++ \
+    libopenblas-dev \
+    libomp-dev \
+    && rm -rf /var/lib/apt/lists/*
+ENV CFLAGS="-march=armv8-a"
+
+COPY requirements.txt .
 
 RUN pip install --no-cache-dir -r requirements.txt
+
+COPY app/ /app/
+
+EXPOSE 8000
 
 CMD ["python", "main.py"]

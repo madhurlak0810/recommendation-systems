@@ -1,13 +1,18 @@
 import pandas as pd
 import numpy as np
 from sklearn.decomposition import TruncatedSVD
+import datetime
 import joblib
 from lightfm import LightFM
 from lightfm.data import Dataset
+from lightfm.evaluation import precision_at_k, recall_at_k
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import os
 import os # Import os for path joining
+from clearml import Task, Logger
+import matplotlib.pyplot as plt
+from collections import Counter
 
 
 class ProductHybridModel:
@@ -196,7 +201,7 @@ class ProductCollabModel:
     """
     A class to handle the training and recommendation of products using a collaborative filtering model (LightFM).
     """
-    def __init__(self, csv_path, save_model_dir, n_reviews=10000, n_components=10, loss='warp', epochs=30, num_threads=4):
+    def __init__(self, csv_path, save_model_dir, n_reviews=10000, n_components=10, loss='warp', epochs=30, num_threads=4, k=20):
         """
         Initializes the ProductCollabModel.
 
@@ -216,6 +221,7 @@ class ProductCollabModel:
         self.loss = loss
         self.epochs = epochs
         self.num_threads = num_threads
+        self.k = k
         self.model_path = os.path.join(self.save_model_dir, 'lightfm_collab_model.joblib')
         self.model = None
         self.dataset = None
@@ -225,6 +231,28 @@ class ProductCollabModel:
 
         self.train_and_save_model()
 
+    def ndcg_at_k(self):
+        n_users, n_items = self.interactions.shape
+        ndcg_scores = []
+
+        for user_id in range(n_users):  # Use full user range
+            known_items = self.interactions.tocsr()[user_id].indices
+            if len(known_items) == 0:
+                continue
+
+            scores = self.model.predict(user_id, np.arange(n_items))
+            top_k_items = np.argsort(-scores)[:self.k]
+            rel = np.isin(top_k_items, known_items).astype(int)
+
+            dcg = (rel / np.log2(np.arange(2, rel.size + 2))).sum()
+            ideal_rel = np.sort(rel)[::-1]
+            idcg = (ideal_rel / np.log2(np.arange(2, rel.size + 2))).sum()
+
+            ndcg = dcg / idcg if idcg > 0 else 0
+            ndcg_scores.append(ndcg)
+
+        return np.array(ndcg_scores)
+
     def train_and_save_model(self):
         """
         Loads data, trains a LightFM model, saves the model, dataset, and interactions,
@@ -233,6 +261,24 @@ class ProductCollabModel:
         Returns:
             bool: True if training and saving were successful, False otherwise.
         """
+        # clearml task setup
+        datetime_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        task: Task = Task.init(
+            project_name="recommendation-systems",
+            task_name=f"collab model training - {datetime_str}",
+        )
+        logger = Logger.current_logger()
+
+        # record parameters
+        params = {
+            "n_reviews": self.n_reviews,
+            "no_components": self.n_components,
+            "loss": self.loss,
+            "num_epochs": self.epochs,
+            "k": self.k,
+        }
+        task.connect(params)
+
         # Load data
         try:
             df = pd.read_csv(self.csv_path)
@@ -279,7 +325,34 @@ class ProductCollabModel:
         # Train model
         try:
             self.model = LightFM(no_components=self.n_components, loss=self.loss, random_state=42)
-            self.model.fit(self.interactions, epochs=self.epochs, num_threads=self.num_threads, verbose=True)
+
+            for epoch in range(params["num_epochs"]):
+                # only fit partial
+                self.model.fit_partial(self.interactions, epochs=1, num_threads=4)
+
+                # precision@k
+                precisions = precision_at_k(self.model, self.interactions, k=self.k)
+                precision = precisions.mean()
+                for user_id, user_precision in enumerate(precisions):
+                    logger.report_scalar(
+                        title=f"UserPrecision@k={self.k}",
+                        series=f"User {user_id}",
+                        iteration=epoch,
+                        value=user_precision
+                    )
+                logger.report_scalar(f"Precision@k={self.k}", "Epoch", iteration=epoch, value=precision)
+                print(f"Epoch {epoch}/{self.epochs} - Precision@k={self.k}: {precision:.4f}")
+
+                # recall@k
+                recall = recall_at_k(self.model, self.interactions, k=self.k).mean()
+                logger.report_scalar(f"Recall@k={self.k}", "Epoch", iteration=epoch, value=recall)
+                print(f"Epoch {epoch}/{self.epochs} - Recall@k={self.k}: {recall:.4f}")
+
+                # ndcg
+                ndcg = self.ndcg_at_k().mean()
+                logger.report_scalar(f"NDCG@k={self.k}", "Epoch", iteration=epoch, value=ndcg)
+                print(f"Epoch {epoch}/{self.epochs} - NDCG@k={self.k}: {ndcg:.4f}")
+
             print("LightFM model trained.")
         except Exception as e:
             print(f"Error training LightFM model: {e}")
@@ -300,7 +373,9 @@ class ProductCollabModel:
         # Save the model components
         try:
             joblib.dump(model_data, self.model_path)
+            task.upload_artifact(name="lightfm_model", artifact_object=self.model_path)
             print(f"Collaborative model data saved to {self.model_path}")
+            task.close()
             return True
         except Exception as e:
             print(f"Error saving collaborative model data to {self.model_path}: {e}")
