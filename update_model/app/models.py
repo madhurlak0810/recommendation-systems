@@ -13,6 +13,23 @@ import os # Import os for path joining
 from clearml import Task, Logger
 import matplotlib.pyplot as plt
 from collections import Counter
+from services.s3_service import upload_joblib_to_s3
+from dotenv import load_dotenv
+
+# Check if AWS_SECRET_KEY is set in the environment
+if not os.getenv("AWS_SECRET_KEY"):
+    print("AWS_SECRET_KEY not found in environment, attempting to load from .env file.")
+    # Load environment variables from .env file
+    load_dotenv()
+
+    # Fetch AWS credentials after potentially loading .env
+    AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
+    AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
+
+# Optional: Add a check/warning if keys are still missing
+if not AWS_ACCESS_KEY or not AWS_SECRET_KEY:
+    print("Warning: AWS credentials (AWS_ACCESS_KEY or AWS_SECRET_KEY) could not be loaded.")
+
 
 
 class ProductHybridModel:
@@ -98,6 +115,8 @@ class ProductHybridModel:
         try:
             joblib.dump(model_data, self.model_path)
             print(f"Model data (decomposed matrix and product names) saved to {self.model_path}")
+            # Upload to S3
+            upload_joblib_to_s3(self.model_path, "your-recommender-data", "models/svd_model_user_data.joblib")
             # Calculate correlation matrix after successful training
             self._calculate_correlation_matrix()
             return True
@@ -376,6 +395,8 @@ class ProductCollabModel:
             task.upload_artifact(name="lightfm_model", artifact_object=self.model_path)
             print(f"Collaborative model data saved to {self.model_path}")
             task.close()
+            # Upload to S3
+            upload_joblib_to_s3(self.model_path, "your-recommender-data", "models/lightfm_collab_model.joblib")
             return True
         except Exception as e:
             print(f"Error saving collaborative model data to {self.model_path}: {e}")
@@ -513,10 +534,20 @@ class ProductNameSimilarityModel:
                 'num_recommendations': self.num_recommendations
             }
 
-            joblib.dump(model_data, self.model_path)
-            print(f"Model data saved to {self.model_path}")
+            try:
+                joblib.dump(model_data, self.model_path)
+                print(f"Model data saved locally to {self.model_path}")
 
-            return True
+                # Assuming S3 upload is desired here as well, similar to other models
+                s3_bucket = "your-recommender-data" # Consider making this configurable
+                s3_key = f"models/{os.path.basename(self.model_path)}"
+                upload_joblib_to_s3(self.model_path, s3_bucket, s3_key)
+                print(f"Model data uploaded to S3 bucket '{s3_bucket}' with key '{s3_key}'")
+
+                return True
+            except Exception as e:
+                print(f"Error saving model data locally to {self.model_path} or uploading to S3: {e}")
+                return False
 
         except Exception as e:
             print(f"Error training or saving model: {e}")
