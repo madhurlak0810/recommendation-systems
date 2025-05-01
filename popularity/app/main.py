@@ -1,19 +1,30 @@
 from fastapi import FastAPI
+from app.routes import router
 from contextlib import asynccontextmanager
-from app.routes import router, load_data_from_s3, set_global_df, clear_global_df
+from app.routes import load_data_from_s3, set_global_df, ProductNameSimilarityModel
+
+CSV_LOCAL_PATH = "data/models.csv"
+MODEL_DIR      = "model/"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    # Startup: Load S3 data once
-    df_s3 = load_data_from_s3()
-    set_global_df(df_s3)
-    print("Data loaded from S3 at startup")
+    df = load_data_from_s3()
+    set_global_df(df)
 
+    global model
+    model = ProductNameSimilarityModel(csv_path=CSV_LOCAL_PATH, save_model_dir=MODEL_DIR)
+
+    print("Startup complete: Data loaded and model initialized.")
     yield
 
-    clear_global_df()
-    print("Cleared data at shutdown")
+    print("Shutdown complete.")
 
-app = FastAPI(lifespan=lifespan)
+app = FastAPI\
+(
+    title="Product Name Similarity API",
+    description="API for retrieving top products and similar product names",
+    version="1.0.0",
+    lifespan=lifespan
+)
 
 app.include_router(router)

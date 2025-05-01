@@ -3,3 +3,5 @@ uvicorn
 boto3
 pandas
 dotenv
+scikit-learn
+lightfm
