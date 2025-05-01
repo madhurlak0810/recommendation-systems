@@ -13,22 +13,9 @@ import os # Import os for path joining
 from clearml import Task, Logger
 import matplotlib.pyplot as plt
 from collections import Counter
-from services.s3_service import upload_joblib_to_s3
-from dotenv import load_dotenv
+from app.services.s3_service import upload_joblib_to_s3
 
-# Check if AWS_SECRET_KEY is set in the environment
-if not os.getenv("AWS_SECRET_KEY"):
-    print("AWS_SECRET_KEY not found in environment, attempting to load from .env file.")
-    # Load environment variables from .env file
-    load_dotenv()
 
-    # Fetch AWS credentials after potentially loading .env
-    AWS_SECRET_KEY = os.getenv("AWS_SECRET_KEY")
-    AWS_ACCESS_KEY = os.getenv("AWS_ACCESS_KEY")
-
-# Optional: Add a check/warning if keys are still missing
-if not AWS_ACCESS_KEY or not AWS_SECRET_KEY:
-    print("Warning: AWS credentials (AWS_ACCESS_KEY or AWS_SECRET_KEY) could not be loaded.")
 
 
 
@@ -517,10 +504,12 @@ class ProductNameSimilarityModel:
             self.product_names = pd.Series(df['name']).dropna().unique()
 
             # Step 2: Train cosine similarity model
+            # self.vectorizer = TfidfVectorizer(stop_words='english')
+            # self.tfidf_matrix = self.vectorizer.fit_transform(self.product_names)
+            # self.cosine_sim = cosine_similarity(self.tfidf_matrix, self.tfidf_matrix)
+            # self.product_indices = {name: idx for idx, name in enumerate(self.product_names)}
             self.vectorizer = TfidfVectorizer(stop_words='english')
-            self.tfidf_matrix = self.vectorizer.fit_transform(self.product_names)
-            self.cosine_sim = cosine_similarity(self.tfidf_matrix, self.tfidf_matrix)
-            self.product_indices = {name: idx for idx, name in enumerate(self.product_names)}
+            self.vectorizer.fit(self.product_names)
 
             # Step 3: Save model
             os.makedirs(self.save_model_dir, exist_ok=True)
@@ -528,8 +517,6 @@ class ProductNameSimilarityModel:
             model_data = {
                 'product_names': self.product_names,
                 'vectorizer': self.vectorizer,
-                'tfidf_matrix': self.tfidf_matrix,
-                'cosine_sim': self.cosine_sim,
                 'product_indices': self.product_indices,
                 'num_recommendations': self.num_recommendations
             }
@@ -537,12 +524,8 @@ class ProductNameSimilarityModel:
             try:
                 joblib.dump(model_data, self.model_path)
                 print(f"Model data saved locally to {self.model_path}")
-
-                # Assuming S3 upload is desired here as well, similar to other models
-                s3_bucket = "your-recommender-data" # Consider making this configurable
-                s3_key = f"models/{os.path.basename(self.model_path)}"
-                upload_joblib_to_s3(self.model_path, s3_bucket, s3_key)
-                print(f"Model data uploaded to S3 bucket '{s3_bucket}' with key '{s3_key}'")
+                # Upload to S3
+                upload_joblib_to_s3(self.model_path, "your-recommender-data", "models/cosine_similarity_model.joblib")
 
                 return True
             except Exception as e:
@@ -559,8 +542,8 @@ class ProductNameSimilarityModel:
                 model_data = joblib.load(model_path)
                 self.product_names = model_data['product_names']
                 self.vectorizer = model_data['vectorizer']
-                self.tfidf_matrix = model_data['tfidf_matrix']
-                self.cosine_sim = model_data['cosine_sim']
+                self.tfidf_matrix = self.vectorizer.transform(self.product_names)
+                self.cosine_sim = cosine_similarity(self.tfidf_matrix, self.tfidf_matrix)
                 self.product_indices = model_data['product_indices']
                 self.num_recommendations = model_data['num_recommendations']
                 self.model_path = model_path
@@ -574,6 +557,7 @@ class ProductNameSimilarityModel:
     def get_similar_products(self, product_name):
         # Always compare against the vectorized list
         product_vector = self.vectorizer.transform([product_name])
+        self.tfidf_matrix = self.vectorizer.transform(self.product_names)
         similarity_scores = cosine_similarity(product_vector, self.tfidf_matrix).flatten()
         top_indices = similarity_scores.argsort()[::-1][1:self.num_recommendations+1]
         return [(self.product_names[i], round(similarity_scores[i], 3)) for i in top_indices]
