@@ -1,12 +1,14 @@
 from fastapi import FastAPI
-from popularity.app.routes import load_data_from_s3, ProductNameSimilarityModel, download_joblib_from_s3
-from popularity.app.routes import router
+from app.routes import load_data_from_s3, ProductNameSimilarityModel, download_joblib_from_s3
+from app.routes import router
 from contextlib import asynccontextmanager
+import os
 # from app.routes import router
 # from app.routes import load_data_from_s3, set_global_df, ProductNameSimilarityModel,download_joblib_from_s3
 # from app.routes import routes
 CSV_LOCAL_PATH = "data/models.csv"
 MODEL_DIR      = "models/"
+os.makedirs(MODEL_DIR, exist_ok=True)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
