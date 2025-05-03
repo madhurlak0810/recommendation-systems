@@ -7,9 +7,10 @@ WORKDIR /app
 # Install OS dependencies
 RUN apt-get update && apt-get install -y gcc g++ build-essential && rm -rf /var/lib/apt/lists/*
 
-# Copy project files
-COPY . .
-COPY app/ ./app
+# Copy fastapi input
+COPY /app ./app
+COPY /requirements.txt .
+
 
 # Install Python dependencies
 RUN pip install --no-cache-dir -r requirements.txt

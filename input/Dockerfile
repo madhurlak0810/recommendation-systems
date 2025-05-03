@@ -9,12 +9,12 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /app
 
 # Install Python deps
-COPY input/requirements.txt .
+COPY /requirements.txt .
 RUN pip install --upgrade pip \
     && pip install --no-cache-dir -r requirements.txt
 
 # Copy your FastAPI code
-COPY input/app ./app
+COPY /app ./app
 
 # Expose FastAPI port
 EXPOSE 8000

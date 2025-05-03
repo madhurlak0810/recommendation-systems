@@ -1,6 +1,6 @@
 from fastapi import FastAPI
-from hybrid.app.routes import ProductHybridModel, download_joblib_from_s3
-from hybrid.app.routes import router
+from app.routes import ProductHybridModel, download_joblib_from_s3
+from app.routes import router
 from contextlib import asynccontextmanager
 import os
 
@@ -10,9 +10,9 @@ os.makedirs(MODEL_DIR, exist_ok=True)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Download the model from S3
-    download_joblib_from_s3("your-recommender-data", "models/svd_model_user_data.joblib", MODEL_DIR + "svd_model_user.joblib")
+    download_joblib_from_s3("your-recommender-data", "models/svd_model_user_data.joblib", MODEL_DIR + "svd_model_user_data.joblib")
     model = ProductHybridModel()
-    model.load_model(MODEL_DIR + "svd_model_user.joblib")
+    model.load_model(MODEL_DIR + "svd_model_user_data.joblib")
     # Initialize the model with the loaded data
     app.state.model = model
     print("Startup complete: Data loaded and model initialized.")

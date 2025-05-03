@@ -1,0 +1,6 @@
+fastapi
+uvicorn
+pandas
+boto3
+joblib
+numpy
