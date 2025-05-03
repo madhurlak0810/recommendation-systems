@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Docker image name (replace with your own image name and tag)
-IMAGE_NAME="jliu3714/colab-app"
+IMAGE_NAME="jliu3714/colab-app-container"
 TAG="latest"  # You can replace 'latest' with a version or tag of your choice
 
 # Build the Docker image

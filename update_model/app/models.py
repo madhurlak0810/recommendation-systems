@@ -9,11 +9,8 @@ from lightfm.evaluation import precision_at_k, recall_at_k
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import os
-import os # Import os for path joining
-from clearml import Task, Logger
-import matplotlib.pyplot as plt
-from collections import Counter
-from app.services.s3_service import upload_joblib_to_s3
+from clearml import Task, Logger, OutputModel
+from services.s3_service import upload_joblib_to_s3
 
 
 
@@ -52,6 +49,21 @@ class ProductHybridModel:
         Returns:
             bool: True if training and saving were successful, False otherwise.
         """
+        # clearml task setup
+        datetime_str = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        task: Task = Task.init(
+            project_name="recommendation-systems",
+            task_name=f"hybrid model training - {datetime_str}",
+        )
+        logger = Logger.current_logger()
+
+        # record parameters
+        params = {
+            "n_reviews": self.n_reviews,
+            "no_components": self.n_components,
+        }
+        task.connect(params)
+
         # Load data
         try:
             df = pd.read_csv(self.csv_path)
@@ -85,6 +97,10 @@ class ProductHybridModel:
             SVD_model = TruncatedSVD(n_components=self.n_components, random_state=42)
             self.decomposed_matrix = SVD_model.fit_transform(X)
             print(f"SVD performed with {self.n_components} components. Decomposed matrix shape: {self.decomposed_matrix.shape}")
+
+            # explained variance ratio
+            explained_var = SVD_model.explained_variance_ratio_.sum()
+            logger.report_scalar("training", "explained_variance", iteration=0, value=explained_var)
         except Exception as e:
             print(f"Error during SVD fitting/transformation: {e}")
             return False
@@ -101,7 +117,9 @@ class ProductHybridModel:
         # Save the decomposed matrix and product names
         try:
             joblib.dump(model_data, self.model_path)
+            task.upload_artifact("svd_model", artifact_object=self.model_path)
             print(f"Model data (decomposed matrix and product names) saved to {self.model_path}")
+            task.close()
             # Upload to S3
             upload_joblib_to_s3(self.model_path, "your-recommender-data", "models/svd_model_user_data.joblib")
             # Calculate correlation matrix after successful training
@@ -389,92 +407,92 @@ class ProductCollabModel:
             print(f"Error saving collaborative model data to {self.model_path}: {e}")
             return False
 
-    def _load_model_data(self):
-        """Loads collaborative model data from the file if not already loaded."""
-        if self.model is None or self.dataset is None or self.interactions is None:
-            try:
-                model_data = joblib.load(self.model_path)
-                self.model = model_data['model']
-                self.dataset = model_data['dataset']
-                self.interactions = model_data['interactions']
-                self.user_id_map = model_data.get('user_id_map') # Use .get for backward compatibility
-                self.item_id_map = model_data.get('item_id_map')
-                # Regenerate maps if they weren't saved (older versions)
-                if self.user_id_map is None or self.item_id_map is None:
-                        self.user_id_map, _, self.item_id_map, _ = self.dataset.mapping()
-                print(f"Collaborative model data loaded successfully from {self.model_path}")
-                return True
-            except FileNotFoundError:
-                print(f"Error: Collaborative model file not found at {self.model_path}")
-                return False
-            except KeyError as e:
-                print(f"Error: Collaborative model file at {self.model_path} is missing expected key: {e}")
-                return False
-            except Exception as e:
-                print(f"Error loading collaborative model data from {self.model_path}: {e}")
-                return False
-        return True # Already loaded
+    # def _load_model_data(self):
+    #     """Loads collaborative model data from the file if not already loaded."""
+    #     if self.model is None or self.dataset is None or self.interactions is None:
+    #         try:
+    #             model_data = joblib.load(self.model_path)
+    #             self.model = model_data['model']
+    #             self.dataset = model_data['dataset']
+    #             self.interactions = model_data['interactions']
+    #             self.user_id_map = model_data.get('user_id_map') # Use .get for backward compatibility
+    #             self.item_id_map = model_data.get('item_id_map')
+    #             # Regenerate maps if they weren't saved (older versions)
+    #             if self.user_id_map is None or self.item_id_map is None:
+    #                     self.user_id_map, _, self.item_id_map, _ = self.dataset.mapping()
+    #             print(f"Collaborative model data loaded successfully from {self.model_path}")
+    #             return True
+    #         except FileNotFoundError:
+    #             print(f"Error: Collaborative model file not found at {self.model_path}")
+    #             return False
+    #         except KeyError as e:
+    #             print(f"Error: Collaborative model file at {self.model_path} is missing expected key: {e}")
+    #             return False
+    #         except Exception as e:
+    #             print(f"Error loading collaborative model data from {self.model_path}: {e}")
+    #             return False
+    #     return True # Already loaded
 
-    def recommend_products(self, user_id, top_n=10):
-        """
-        Recommends products for a given user using the trained LightFM model.
+    # def recommend_products(self, user_id, top_n=10):
+    #     """
+    #     Recommends products for a given user using the trained LightFM model.
 
-        Args:
-            user_id (str): The user ID for whom to generate recommendations.
-            top_n (int): The maximum number of recommendations to return.
+    #     Args:
+    #         user_id (str): The user ID for whom to generate recommendations.
+    #         top_n (int): The maximum number of recommendations to return.
 
-        Returns:
-            list: A list of recommended product names (str).
-            None: If the model cannot be loaded, the user is unknown, or an error occurs.
-        """
-        # Ensure model data is loaded
-        if not self._load_model_data():
-            return None
+    #     Returns:
+    #         list: A list of recommended product names (str).
+    #         None: If the model cannot be loaded, the user is unknown, or an error occurs.
+    #     """
+    #     # Ensure model data is loaded
+    #     if not self._load_model_data():
+    #         return None
 
-        if self.model is None or self.dataset is None or self.user_id_map is None or self.item_id_map is None:
-                print("Error: Model components not properly loaded.")
-                return None
+    #     if self.model is None or self.dataset is None or self.user_id_map is None or self.item_id_map is None:
+    #             print("Error: Model components not properly loaded.")
+    #             return None
 
-        # Check if user_id exists in the training data
-        if user_id not in self.user_id_map:
-            print(f"Error: User '{user_id}' not found in the training data.")
-            # Option: Return popular items or None
-            return None # Or implement popular item fallback
+    #     # Check if user_id exists in the training data
+    #     if user_id not in self.user_id_map:
+    #         print(f"Error: User '{user_id}' not found in the training data.")
+    #         # Option: Return popular items or None
+    #         return None # Or implement popular item fallback
 
-        try:
-            # Get the internal user index
-            internal_user_id = self.user_id_map[user_id]
+    #     try:
+    #         # Get the internal user index
+    #         internal_user_id = self.user_id_map[user_id]
 
-            # Get all item internal IDs
-            n_users, n_items = self.interactions.shape
-            item_indices = np.arange(n_items)
+    #         # Get all item internal IDs
+    #         n_users, n_items = self.interactions.shape
+    #         item_indices = np.arange(n_items)
 
-            # Predict scores for all items for the given user
-            scores = self.model.predict(internal_user_id, item_indices, num_threads=self.num_threads)
+    #         # Predict scores for all items for the given user
+    #         scores = self.model.predict(internal_user_id, item_indices, num_threads=self.num_threads)
 
-            # Get item names back from internal IDs
-            # Create reverse mapping from internal item ID to original item name
-            reverse_item_map = {v: k for k, v in self.item_id_map.items()}
+    #         # Get item names back from internal IDs
+    #         # Create reverse mapping from internal item ID to original item name
+    #         reverse_item_map = {v: k for k, v in self.item_id_map.items()}
 
-            # Combine scores with item names
-            scored_items = sorted(zip(scores, item_indices), key=lambda x: x[0], reverse=True)
+    #         # Combine scores with item names
+    #         scored_items = sorted(zip(scores, item_indices), key=lambda x: x[0], reverse=True)
 
-            # Get top N recommendations (excluding items the user already interacted with, if desired - requires interactions matrix)
-            # For simplicity, we just return the top N scored items here.
-            # A more robust implementation might filter out already rated items.
-            recommended_item_indices = [item_idx for score, item_idx in scored_items[:top_n*2]] # Get more initially to allow filtering
-            recommended_item_names = [reverse_item_map[idx] for idx in recommended_item_indices if idx in reverse_item_map]
+    #         # Get top N recommendations (excluding items the user already interacted with, if desired - requires interactions matrix)
+    #         # For simplicity, we just return the top N scored items here.
+    #         # A more robust implementation might filter out already rated items.
+    #         recommended_item_indices = [item_idx for score, item_idx in scored_items[:top_n*2]] # Get more initially to allow filtering
+    #         recommended_item_names = [reverse_item_map[idx] for idx in recommended_item_indices if idx in reverse_item_map]
 
 
-            print(f"Generated {len(recommended_item_names[:top_n])} recommendations for user '{user_id}'.")
-            return recommended_item_names[:top_n]
+    #         print(f"Generated {len(recommended_item_names[:top_n])} recommendations for user '{user_id}'.")
+    #         return recommended_item_names[:top_n]
 
-        except KeyError:
-                print(f"Error: Internal mapping issue for user '{user_id}'.")
-                return None
-        except Exception as e:
-            print(f"Error generating recommendations for user '{user_id}': {e}")
-            return None
+    #     except KeyError:
+    #             print(f"Error: Internal mapping issue for user '{user_id}'.")
+    #             return None
+    #     except Exception as e:
+    #         print(f"Error generating recommendations for user '{user_id}': {e}")
+    #         return None
         
 
 class ProductNameSimilarityModel:
