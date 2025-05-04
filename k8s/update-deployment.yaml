@@ -3,11 +3,12 @@ kind: CronJob
 metadata:
   name: update-app-cronjob
 spec:
-  schedule: "*/5 * * * *"  # Every 5 minutes
+  schedule: "*/30 * * * *"  # Every 30 minutes
   jobTemplate:
     spec:
       template:
         spec:
+          restartPolicy: OnFailure
           containers:
           - name: update-app
             image: madhurlak/update_model:latest
@@ -40,4 +41,3 @@ spec:
                 secretKeyRef:
                   name: aws-cred
                   key: aws_default_region
-          restartPolicy: OnFailure
