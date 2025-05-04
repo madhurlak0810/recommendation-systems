@@ -9,12 +9,8 @@ from lightfm.evaluation import precision_at_k, recall_at_k
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import os
-from clearml import Task, Logger, OutputModel
-from services.s3_service import upload_joblib_to_s3
-
-
-
-
+from clearml import Task, Logger
+from app.services.s3_service import upload_joblib_to_s3
 
 class ProductHybridModel:
     """
