@@ -1,15 +1,43 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: update-job
+  name: update-app-cronjob
 spec:
-  schedule: "0 * * * *"  # Runs every hour
+  schedule: "*/5 * * * *"  # Every 5 minutes
   jobTemplate:
     spec:
       template:
         spec:
           containers:
-          - name: update-job
-            image: your-dockerhub-username/update-job:latest
-            command: ["python", "update.py"]
+          - name: update-app
+            image: madhurlak/update_model:latest
+            command: ["python", "main.py"]
+            env:
+            - name: CLEARML_API_HOST
+              value: "https://api.clear.ml"
+            - name: CLEARML_API_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: clearml-secret
+                  key: access_key
+            - name: CLEARML_API_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: clearml-secret
+                  key: secret_key
+            - name: AWS_ACCESS_KEY_ID
+              valueFrom:
+                secretKeyRef:
+                  name: aws-cred
+                  key: aws_access_key_id
+            - name: AWS_SECRET_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: aws-cred
+                  key: aws_secret_access_key
+            - name: AWS_DEFAULT_REGION
+              valueFrom:
+                secretKeyRef:
+                  name: aws-cred
+                  key: aws_default_region
           restartPolicy: OnFailure

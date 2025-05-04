@@ -13,13 +13,10 @@ RUN apt-get update && apt-get install -y \
 ENV CFLAGS="-march=armv8-a"
 
 COPY requirements.txt .
-COPY .clearml.conf /root/.clearml.conf
 
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY /app ./app
+COPY /app /app
 
-EXPOSE 8000
-
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
-# CMD ["python", "main.py"]
+#CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+CMD ["python", "main.py"]
