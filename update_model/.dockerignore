@@ -1,0 +1,17 @@
+# Ignore model and data directories
+data/
+models/
+
+# Python cache and bytecode
+__pycache__/
+
+# OS/system files
+.DS_Store
+Thumbs.db
+
+# Git and other version control
+.git/
+.gitignore
+
+# Environment/config files (if you don’t need them inside the image)
+.env
