@@ -41,9 +41,8 @@ metadata:
 spec:
   selector:
     app: input-api
+  type: LoadBalancer
   ports:
     - protocol: TCP
       port: 80
       targetPort: 8000
-      nodePort: 30002
-  type: NodePort
